@@ -1,7 +1,6 @@
 import discord
-from discord.ext import commands, tasks
+from discord.ext import commands
 import random
-import asyncio
 import os
 from dotenv import load_dotenv  # ← 追加
 
@@ -48,7 +47,7 @@ theme_pool = load_themes()
 
 # --- コマンド ---
 
-@bot.command()
+@bot.command(name='ワードウルフ')
 async def ワードウルフ(ctx):
     if game_data['organizer']:
         await ctx.send('すでにゲームが進行中です')
@@ -73,25 +72,47 @@ async def ワードウルフ(ctx):
     await message.add_reaction('✅')
 
 @bot.event
-async def on_reaction_add(reaction, user):
+async def on_raw_reaction_add(payload):
+    channel = bot.get_channel(payload.channel_id)
+    message = await channel.fetch_message(payload.message_id)
+    user = payload.member
+    reaction = discord.utils.get(message.reactions, emoji=payload.emoji.name)
+    
+    # ゲームの進行中ならば処理を行う
+    if message.id == getattr(game_data['message_embed'], 'id', None):
+        await on_reaction_add_join(reaction, user)
+    elif game_data['vote_message'] and message.id == game_data['vote_message'].id:
+        await on_reaction_add_vote(reaction, user)
+
+async def on_reaction_add_join(reaction, user):
     if user.bot:
         return
 
-    if reaction.message.id != getattr(game_data['message_embed'], 'id', None):
+    # 参加プレイヤーに追加
+    if reaction.emoji == '✅' and user != game_data['organizer']:
+        if user not in game_data['players']:
+            game_data['players'].append(user)
+            await update_embed_players()
+
+        # 参加人数が3人以上になったらゲーム開始
+        if len(game_data['players']) >= 3:
+            await start_game(reaction.message.channel)
         return
 
-    if reaction.emoji == '✅':
-        if user != game_data['organizer']:
-            return
-        if len(game_data['players']) < 3:
-            await reaction.message.channel.send('開始するには最低3人参加する必要があります')
-            return
-        await start_game(reaction.message.channel)
+async def on_reaction_add_vote(reaction, user):
+    if user.bot or reaction.message.id != game_data['vote_message'].id:
+        return
+    if user.id in game_data['voted_users']:
         return
 
-    if user not in game_data['players']:
-        game_data['players'].append(user)
-        await update_embed_players()
+    for i in range(len(game_data['players'])):
+        if reaction.emoji == f'{i+1}⃣':
+            game_data['votes'][i] += 1
+            game_data['voted_users'].add(user.id)
+            break
+
+    if len(game_data['voted_users']) == len(game_data['players']):
+        await show_result(reaction.message.channel)
 
 async def update_embed_players():
     embed = game_data['message_embed'].embeds[0]
@@ -131,7 +152,7 @@ async def start_game(channel):
                           color=0xff0000)
     await channel.send(embed=embed)
 
-@bot.command()
+@bot.command(name='投票')
 async def 投票(ctx):
     if ctx.author not in game_data['players']:
         await ctx.send('ゲームに参加していません')
@@ -148,23 +169,7 @@ async def 投票(ctx):
     for i in range(len(game_data['players'])):
         await vote_msg.add_reaction(f'{i+1}⃣')  # 1️⃣, 2️⃣, etc
 
-@bot.event
-async def on_reaction_add_vote(reaction, user):
-    if user.bot or reaction.message.id != getattr(game_data['vote_message'], 'id', None):
-        return
-    if user.id in game_data['voted_users']:
-        return
-
-    for i in range(len(game_data['players'])):
-        if reaction.emoji == f'{i+1}⃣':
-            game_data['votes'][i] += 1
-            game_data['voted_users'].add(user.id)
-            break
-
-    if len(game_data['voted_users']) == len(game_data['players']):
-        await show_result(reaction.message.channel)
-
-@bot.command()
+@bot.command(name='終了')
 async def 終了(ctx):
     await show_result(ctx.channel)
     reset_game()
@@ -224,16 +229,5 @@ def reset_game():
         'vote_start_time': None,
         'message_embed': None
     })
-
-@bot.event
-async def on_raw_reaction_add(payload):
-    channel = bot.get_channel(payload.channel_id)
-    message = await channel.fetch_message(payload.message_id)
-    user = payload.member
-    reaction = discord.utils.get(message.reactions, emoji=payload.emoji.name)
-    if game_data['vote_message'] and message.id == game_data['vote_message'].id:
-        await on_reaction_add_vote(reaction, user)
-    else:
-        await on_reaction_add(reaction, user)
 
 bot.run(TOKEN)
