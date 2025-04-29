@@ -2,9 +2,8 @@ import discord
 from discord.ext import commands
 import random
 import os
-from dotenv import load_dotenv  # 環境変数を読み込むためのモジュール
+from dotenv import load_dotenv
 
-# 環境変数を読み込む
 load_dotenv()
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 
@@ -30,7 +29,6 @@ game_data = {
     'message_embed': None
 }
 
-# お題読み込み
 from collections import defaultdict
 
 def load_themes():
@@ -45,15 +43,11 @@ def load_themes():
 
 theme_pool = load_themes()
 
-# スラッシュコマンド用の処理
 @bot.event
 async def on_ready():
     print(f'{bot.user} has connected to Discord!')
-
-    # スラッシュコマンドをグローバルに登録する
     await bot.tree.sync()
 
-# スラッシュコマンドを追加
 @bot.tree.command(name="ワードウルフ", description="ワードウルフゲームを開始します")
 async def word_wolf(interaction: discord.Interaction):
     if game_data['organizer']:
@@ -67,7 +61,6 @@ async def word_wolf(interaction: discord.Interaction):
     game_data['words'] = {}
     game_data['vote_message'] = None
     game_data['vote_start_time'] = None
-
     game_data['theme'] = 'ランダム'
 
     embed = discord.Embed(title='ワードウルフ参加者募集！',
@@ -76,8 +69,8 @@ async def word_wolf(interaction: discord.Interaction):
     embed.add_field(name='参加プレイヤー', value='なし')
     message = await interaction.channel.send(embed=embed)
     game_data['message_embed'] = message
-    await message.add_reaction('👍')  # いいねで参加
-    await message.add_reaction('✅')  # 主催者用の開始リアクション
+    await message.add_reaction('👍')
+    await message.add_reaction('✅')
 
 @bot.event
 async def on_reaction_add(reaction, user):
@@ -87,24 +80,42 @@ async def on_reaction_add(reaction, user):
     if reaction.message.id != getattr(game_data['message_embed'], 'id', None):
         return
 
-    if reaction.emoji == '👍':  # 「いいね」ボタンで参加
+    if reaction.emoji == '👍':
         if user not in game_data['players']:
             game_data['players'].append(user)
             await update_embed_players()
 
-        # 参加人数が3人未満の場合、主催者に説明メッセージ
-        if len(game_data['players']) < 3:
-            await game_data['message_embed'].channel.send(f'{game_data["organizer"].mention} ゲーム開始には最低3人の参加者が必要です。')
-
-        # 参加人数が3人以上の場合、主催者が「✅」を押すとゲームが開始されるように
-        if len(game_data['players']) >= 3:
-            await game_data['message_embed'].channel.send(f'{game_data["organizer"].mention} 3人以上の参加者が集まりました！主催者が「✅」を押してゲームを開始してください。')
-
-    elif reaction.emoji == '✅' and user == game_data['organizer']:  # 主催者が開始リアクションを押す
+    elif reaction.emoji == '✅' and user == game_data['organizer']:
         if len(game_data['players']) < 3:
             await reaction.message.channel.send(f'{game_data["organizer"].mention} ゲーム開始には最低3人の参加者が必要です。')
             return
         await start_game(reaction.message.channel)
+
+@bot.event
+async def on_raw_reaction_add(payload):
+    if payload.user_id == bot.user.id:
+        return
+
+    channel = await bot.fetch_channel(payload.channel_id)
+    message = await channel.fetch_message(payload.message_id)
+    user = await bot.fetch_user(payload.user_id)
+    emoji = str(payload.emoji)
+
+    if message.id == getattr(game_data['vote_message'], 'id', None):
+        await on_reaction_add_vote(message, emoji, user)
+
+async def on_reaction_add_vote(message, emoji, user):
+    if user.id in game_data['voted_users']:
+        return
+
+    for i in range(len(game_data['players'])):
+        if emoji == f'{i+1}⃣':
+            game_data['votes'][i] += 1
+            game_data['voted_users'].add(user.id)
+            break
+
+    if len(game_data['voted_users']) == len(game_data['players']):
+        await show_result(message.channel)
 
 async def update_embed_players():
     embed = game_data['message_embed'].embeds[0]
@@ -113,7 +124,6 @@ async def update_embed_players():
     await game_data['message_embed'].edit(embed=embed)
 
 async def start_game(channel):
-    # お題決定
     if game_data['theme'] == 'ランダム':
         theme = random.choice(list(theme_pool.keys()))
     else:
@@ -137,7 +147,6 @@ async def start_game(channel):
     game_data['citizen_word'] = citizen_word
     game_data['wolf_word'] = wolf_word
 
-    # ゲーム開始メッセージ
     player_list = '\n'.join(p.name for p in players)
     embed = discord.Embed(title='ゲーム開始！',
                           description=f'カテゴリー：{theme}\n\n参加プレイヤー：\n{player_list}\n\n議論を始めてください！',
@@ -160,23 +169,7 @@ async def 投票(interaction: discord.Interaction):
     game_data['vote_start_time'] = discord.utils.utcnow()
 
     for i in range(len(game_data['players'])):
-        await vote_msg.add_reaction(f'{i+1}⃣')  # 1️⃣, 2️⃣, etc
-
-@bot.event
-async def on_reaction_add_vote(reaction, user):
-    if user.bot or reaction.message.id != getattr(game_data['vote_message'], 'id', None):
-        return
-    if user.id in game_data['voted_users']:
-        return
-
-    for i in range(len(game_data['players'])):
-        if reaction.emoji == f'{i+1}⃣':
-            game_data['votes'][i] += 1
-            game_data['voted_users'].add(user.id)
-            break
-
-    if len(game_data['voted_users']) == len(game_data['players']):
-        await show_result(reaction.message.channel)
+        await vote_msg.add_reaction(f'{i+1}⃣')
 
 @bot.tree.command(name="結果", description="投票結果を表示します")
 async def 結果(interaction: discord.Interaction):
@@ -198,7 +191,6 @@ async def show_result(channel):
     votes = game_data['votes']
     players = game_data['players']
 
-    # 投票数最大を取得
     max_votes = max(votes.values())
     candidates = [i for i, v in votes.items() if v == max_votes]
     chosen_index = candidates[0]
@@ -217,6 +209,8 @@ async def show_result(channel):
 
     embed = discord.Embed(title="投票結果", description=result_text, color=0xff0000)
     await channel.send(embed=embed)
+
+    reset_game()
 
 def reset_game():
     game_data.clear()
