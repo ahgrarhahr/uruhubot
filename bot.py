@@ -46,6 +46,7 @@ theme_pool = load_themes()
 @bot.event
 async def on_ready():
     print(f'{bot.user} has connected to Discord!')
+    await bot.tree.sync()
 
 @bot.tree.command(name="ワードウルフ", description="ワードウルフゲームを開始します")
 async def word_wolf(interaction: discord.Interaction):
@@ -160,11 +161,11 @@ async def 結果(interaction: discord.Interaction):
         await interaction.response.send_message('まだ投票が開始されていません')
         return
 
-    # 強制集計
-    if (discord.utils.utcnow() - game_data['vote_start_time']).total_seconds() > 60 or len(game_data['voted_users']) == len(game_data['players']):
-        await show_result(interaction.channel)
-    else:
-        await interaction.response.send_message('投票はまだ終了していません。')
+    if (discord.utils.utcnow() - game_data['vote_start_time']).total_seconds() < 60:
+        await interaction.response.send_message('投票開始から1分経っていません')
+        return
+
+    await show_result(interaction.channel)
 
 async def show_result(channel):
     votes = game_data['votes']
@@ -205,5 +206,56 @@ def reset_game():
         'vote_start_time': None,
         'message_embed': None
     })
+
+@bot.command(name="お題変更")
+async def お題変更(ctx, *, theme_name: str):
+    if not game_data['organizer']:
+        await ctx.send("まだゲームが開始されていません")
+        return
+
+    if theme_name not in theme_pool:
+        await ctx.send(f'お題「{theme_name}」は存在しません。')
+        return
+
+    game_data['theme'] = theme_name
+    await update_embed_players()
+    await ctx.send(f'お題が「{theme_name}」に変更されました！')
+
+@bot.tree.command(name="お題一覧", description="ゲームのお題一覧を表示します")
+async def お題一覧(interaction: discord.Interaction):
+    theme_names = '\n'.join(theme_pool.keys())
+    embed = discord.Embed(title="お題一覧", description=theme_names, color=0x00ffcc)
+    await interaction.response.send_message(embed=embed)
+
+@bot.tree.command(name="終了", description="ゲームを強制終了してワードを公開します")
+async def 終了(interaction: discord.Interaction):
+    if interaction.user != game_data['organizer']:
+        await interaction.response.send_message("主催者だけがこのコマンドを使えます")
+        return
+
+    if not game_data['players']:
+        await interaction.response.send_message("ゲームが開始されていません")
+        return
+
+    players = game_data['players']
+    theme = game_data['theme'] or "（不明）"
+    wolf = next((p for p in players if game_data['words'].get(p.id) == game_data['wolf_word']), None)
+
+    if not wolf:
+        await interaction.response.send_message("ゲームがまだ開始されていないか、ウルフが決まっていません")
+        return
+
+    result_text = (
+        f"ゲームは中断されました。\n\n"
+        f"お題：{theme}\n"
+        f"市民のワード：**{game_data['citizen_word']}**\n"
+        f"ウルフのワード：**{game_data['wolf_word']}**\n\n"
+        f"ウルフは **{wolf.name}** さんでした。"
+    )
+
+    embed = discord.Embed(title="ゲーム終了", description=result_text, color=0x808080)
+    await interaction.response.send_message(embed=embed)
+
+    reset_game()
 
 bot.run(TOKEN)
