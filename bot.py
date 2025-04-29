@@ -14,8 +14,8 @@ intents.message_content = True
 intents.reactions = True
 intents.members = True
 
-# コマンドプレフィックスを!と/両方使えるように設定
-bot = commands.Bot(command_prefix=['!', '/'], intents=intents)
+# プレフィックスを1つに設定（後で判定で使う）
+bot = commands.Bot(command_prefix='!', intents=intents)
 
 # --- データ保持用 ---
 game_data = {
@@ -49,6 +49,15 @@ theme_pool = load_themes()
 @bot.event
 async def on_ready():
     print(f'{bot.user} has connected to Discord!')
+
+@bot.event
+async def on_message(message):
+    # プレフィックスのチェックを行い、プレフィックスに応じたコマンドを実行
+    if message.content.startswith('!') or message.content.startswith('/'):
+        ctx = await bot.get_context(message)
+        await bot.invoke(ctx)
+    else:
+        await bot.process_commands(message)
 
 @bot.command(name="ワードウルフ", description="ワードウルフゲームを開始します")
 async def word_wolf(ctx):
