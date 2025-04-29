@@ -47,14 +47,14 @@ theme_pool = load_themes()
 async def on_ready():
     print(f'{bot.user} has connected to Discord!')
 
-@bot.tree.command(name="ワードウルフ", description="ワードウルフゲームを開始します")
-async def word_wolf(interaction: discord.Interaction):
+@bot.command(name="ワードウルフ", description="ワードウルフゲームを開始します")
+async def word_wolf(ctx):
     if game_data['organizer']:
-        await interaction.response.send_message('すでにゲームが進行中です')
+        await ctx.send('すでにゲームが進行中です')
         return
 
     game_data.update({
-        'organizer': interaction.user,
+        'organizer': ctx.author,
         'players': [],
         'votes': {},
         'voted_users': set(),
@@ -71,7 +71,7 @@ async def word_wolf(interaction: discord.Interaction):
                           description='お題：ランダム（あとで変更可能）\n\nリアクションで参加してください。\n\n**全員の参加が終わったら、主催者が ✅ を押してゲームを開始します。**\n（最低3人以上必要です）',
                           color=0x00ff00)
     embed.add_field(name='参加プレイヤー', value='なし')
-    message = await interaction.channel.send(embed=embed)
+    message = await ctx.send(embed=embed)
     game_data['message_embed'] = message
     await message.add_reaction('👍')
     await message.add_reaction('✅')
@@ -94,6 +94,24 @@ async def on_reaction_add(reaction, user):
             await reaction.message.channel.send(f'{game_data["organizer"].mention} ゲーム開始には最低3人の参加者が必要です。')
             return
         await start_game(reaction.message.channel)
+
+    # 投票のリアクションが追加されたとき
+    if reaction.message.id == game_data['vote_message'].id:
+        if user in game_data['voted_users']:
+            return  # すでに投票したユーザーは無視
+
+        # 投票を記録
+        try:
+            vote_index = int(reaction.emoji[0]) - 1  # 1⃣ → 0
+            if 0 <= vote_index < len(game_data['players']):
+                game_data['votes'][vote_index] += 1
+                game_data['voted_users'].add(user)
+
+                # すべてのプレイヤーが投票した場合、結果を表示
+                if len(game_data['voted_users']) == len(game_data['players']):
+                    await show_result(reaction.message.channel)
+        except (ValueError, IndexError):
+            pass  # 無効なリアクションの場合は無視
 
 async def update_embed_players():
     embed = game_data['message_embed'].embeds[0]
@@ -150,21 +168,21 @@ async def 投票(ctx):
     for i in range(len(game_data['players'])):
         await vote_msg.add_reaction(f'{i+1}⃣')
 
-@bot.event
-async def on_reaction_add(reaction, user):
-    if user.bot:
+@bot.command(name="結果", description="投票結果を表示します")
+async def 結果(ctx):
+    if ctx.author != game_data['organizer']:
+        await ctx.send('主催者だけが実行できます')
         return
 
-    if reaction.message.id != game_data['vote_message'].id:
+    if not game_data['vote_start_time']:
+        await ctx.send('まだ投票が開始されていません')
         return
 
-    if user not in game_data['voted_users']:
-        game_data['voted_users'].add(user)
-        vote_index = int(reaction.emoji[0]) - 1
-        game_data['votes'][vote_index] += 1
+    if (discord.utils.utcnow() - game_data['vote_start_time']).total_seconds() < 60:
+        await ctx.send('投票開始から1分経っていません')
+        return
 
-    if len(game_data['voted_users']) == len(game_data['players']):
-        await show_result(reaction.message.channel)
+    await show_result(ctx.channel)
 
 async def show_result(channel):
     votes = game_data['votes']
@@ -220,20 +238,20 @@ async def お題変更(ctx, *, theme_name: str):
     await update_embed_players()
     await ctx.send(f'お題が「{theme_name}」に変更されました！')
 
-@bot.tree.command(name="お題一覧", description="ゲームのお題一覧を表示します")
-async def お題一覧(interaction: discord.Interaction):
+@bot.command(name="お題一覧", description="ゲームのお題一覧を表示します")
+async def お題一覧(ctx):
     theme_names = '\n'.join(theme_pool.keys())
     embed = discord.Embed(title="お題一覧", description=theme_names, color=0x00ffcc)
-    await interaction.response.send_message(embed=embed)
+    await ctx.send(embed=embed)
 
-@bot.tree.command(name="終了", description="ゲームを強制終了してワードを公開します")
-async def 終了(interaction: discord.Interaction):
-    if interaction.user != game_data['organizer']:
-        await interaction.response.send_message("主催者だけがこのコマンドを使えます")
+@bot.command(name="終了", description="ゲームを強制終了してワードを公開します")
+async def 終了(ctx):
+    if ctx.author != game_data['organizer']:
+        await ctx.send("主催者だけがこのコマンドを使えます")
         return
 
     if not game_data['players']:
-        await interaction.response.send_message("ゲームが開始されていません")
+        await ctx.send("ゲームが開始されていません")
         return
 
     players = game_data['players']
@@ -241,7 +259,7 @@ async def 終了(interaction: discord.Interaction):
     wolf = next((p for p in players if game_data['words'].get(p.id) == game_data['wolf_word']), None)
 
     if not wolf:
-        await interaction.response.send_message("ゲームがまだ開始されていないか、ウルフが決まっていません")
+        await ctx.send("ゲームがまだ開始されていないか、ウルフが決まっていません")
         return
 
     result_text = (
@@ -249,11 +267,12 @@ async def 終了(interaction: discord.Interaction):
         f"お題：{theme}\n"
         f"市民のワード：**{game_data['citizen_word']}**\n"
         f"ウルフのワード：**{game_data['wolf_word']}**\n\n"
-        f"ウルフ：{wolf.name}さん"
+        f"ウルフは **{wolf.name}** さんでした。"
     )
 
-    embed = discord.Embed(title="ゲーム終了", description=result_text, color=0xff0000)
-    await interaction.response.send_message(embed=embed)
+    embed = discord.Embed(title="ゲーム終了", description=result_text, color=0x808080)
+    await ctx.send(embed=embed)
+
     reset_game()
 
 bot.run(TOKEN)
