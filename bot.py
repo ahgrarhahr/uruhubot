@@ -3,6 +3,7 @@ from discord.ext import commands
 import random
 import os
 from dotenv import load_dotenv
+import asyncio
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
@@ -175,22 +176,6 @@ async def show_result(channel):
     await channel.send(embed=embed)
     reset_game()
 
-def reset_game():
-    game_data.clear()
-    game_data.update({
-        'organizer': None,
-        'players': [],
-        'votes': {},
-        'voted_users': set(),
-        'words': {},
-        'theme': '',
-        'citizen_word': '',
-        'wolf_word': '',
-        'vote_message': None,
-        'vote_start_time': None,
-        'message_embed': None
-    })
-
 @bot.command(name="終了", description="ゲームを終了します")
 async def 終了(ctx):
     if game_data['organizer'] != ctx.author:
@@ -203,6 +188,29 @@ async def 終了(ctx):
     embed = discord.Embed(title="ゲーム終了", description=result_text, color=0xff0000)
     await ctx.send(embed=embed)
     reset_game()
+
+@bot.command(name="投票", description="ウルフを投票します")
+async def 投票(ctx, target: discord.User):
+    if target == ctx.author:
+        await ctx.send("自分に投票することはできません。")
+        return
+
+    if target not in game_data['players']:
+        await ctx.send(f"{target.name} はゲームに参加していません。")
+        return
+
+    if ctx.author.id in game_data['voted_users']:
+        await ctx.send("あなたはすでに投票しました。")
+        return
+
+    game_data['votes'][target.id] = game_data['votes'].get(target.id, 0) + 1
+    game_data['voted_users'].add(ctx.author.id)
+
+    await ctx.send(f"{ctx.author.name} さんが {target.name} さんに投票しました。")
+
+    # 全員が投票したら結果を表示
+    if len(game_data['voted_users']) == len(game_data['players']):
+        await show_result(ctx.channel)
 
 @bot.command(name="お題変更", description="ゲームのお題を変更します")
 async def お題変更(ctx, *, theme_name: str):
