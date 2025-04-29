@@ -3,7 +3,14 @@ from discord.ext import commands, tasks
 import random
 import asyncio
 import os
+from dotenv import load_dotenv
+from collections import defaultdict
 
+# --- 環境変数読み込み ---
+load_dotenv()
+TOKEN = os.getenv("DISCORD_BOT_TOKEN")
+
+# --- インテントとBot定義 ---
 intents = discord.Intents.default()
 intents.message_content = True
 intents.reactions = True
@@ -26,9 +33,7 @@ game_data = {
     'message_embed': None
 }
 
-# お題読み込み
-from collections import defaultdict
-
+# --- お題読み込み ---
 def load_themes():
     themes = defaultdict(list)
     with open('お題.txt', 'r', encoding='utf-8') as f:
@@ -47,7 +52,7 @@ async def ワードウルフ(ctx):
     if game_data['organizer']:
         await ctx.send('すでにゲームが進行中です')
         return
-    
+
     game_data['organizer'] = ctx.author
     game_data['players'] = []
     game_data['votes'] = {}
@@ -94,15 +99,13 @@ async def update_embed_players():
     await game_data['message_embed'].edit(embed=embed)
 
 async def start_game(channel):
-    # お題決定
     if game_data['theme'] == 'ランダム':
         theme = random.choice(list(theme_pool.keys()))
     else:
         theme = game_data['theme']
 
-    words = theme_pool[theme]
-    selected = random.sample(words, 2)
-    citizen_word, wolf_word = selected
+    words = random.sample(theme_pool[theme], 2)
+    citizen_word, wolf_word = words
 
     players = game_data['players'][:]
     wolf = random.choice(players)
@@ -118,7 +121,6 @@ async def start_game(channel):
     game_data['citizen_word'] = citizen_word
     game_data['wolf_word'] = wolf_word
 
-    # ゲーム開始メッセージ
     player_list = '\n'.join(p.name for p in players)
     embed = discord.Embed(title='ゲーム開始！',
                           description=f'カテゴリー：{theme}\n\n参加プレイヤー：\n{player_list}\n\n議論を始めてください！',
@@ -140,9 +142,19 @@ async def 投票(ctx):
     game_data['vote_start_time'] = discord.utils.utcnow()
 
     for i in range(len(game_data['players'])):
-        await vote_msg.add_reaction(f'{i+1}⃣')  # 1️⃣, 2️⃣, etc
+        await vote_msg.add_reaction(f'{i+1}\u20e3')
 
 @bot.event
+async def on_raw_reaction_add(payload):
+    channel = bot.get_channel(payload.channel_id)
+    message = await channel.fetch_message(payload.message_id)
+    user = payload.member
+    reaction = discord.utils.get(message.reactions, emoji=payload.emoji.name)
+    if game_data['vote_message'] and message.id == game_data['vote_message'].id:
+        await on_reaction_add_vote(reaction, user)
+    else:
+        await on_reaction_add(reaction, user)
+
 async def on_reaction_add_vote(reaction, user):
     if user.bot or reaction.message.id != getattr(game_data['vote_message'], 'id', None):
         return
@@ -150,13 +162,14 @@ async def on_reaction_add_vote(reaction, user):
         return
 
     for i in range(len(game_data['players'])):
-        if reaction.emoji == f'{i+1}⃣':
+        if reaction.emoji == f'{i+1}\u20e3':
             game_data['votes'][i] += 1
             game_data['voted_users'].add(user.id)
             break
 
     if len(game_data['voted_users']) == len(game_data['players']):
         await show_result(reaction.message.channel)
+        reset_game()
 
 @bot.command()
 async def 終了(ctx):
@@ -184,18 +197,15 @@ async def show_result(channel):
     votes = game_data['votes']
     players = game_data['players']
 
-    # 投票数最大を取得
     max_votes = max(votes.values())
     candidates = [i for i, v in votes.items() if v == max_votes]
     chosen_index = candidates[0]
-
     chosen = players[chosen_index]
     wolf = next(p for p in players if game_data['words'][p.id] == game_data['wolf_word'])
 
     result_text = f'もっとも投票されたのは {chosen.name} さんでした。\n\n'
     result_text += f'ウルフのワードは「{game_data["wolf_word"]}」\n市民のワードは「{game_data["citizen_word"]}」\n\n'
     result_text += f'ウルフは {wolf.name} さんでした！\n\n'
-
     if chosen == wolf:
         result_text += '市民の勝ち！ 🎉'
     else:
@@ -219,15 +229,5 @@ def reset_game():
         'message_embed': None
     })
 
-@bot.event
-async def on_raw_reaction_add(payload):
-    channel = bot.get_channel(payload.channel_id)
-    message = await channel.fetch_message(payload.message_id)
-    user = payload.member
-    reaction = discord.utils.get(message.reactions, emoji=payload.emoji.name)
-    if game_data['vote_message'] and message.id == game_data['vote_message'].id:
-        await on_reaction_add_vote(reaction, user)
-    else:
-        await on_reaction_add(reaction, user)
-
-bot.run('YOUR_BOT_TOKEN')
+# --- Bot起動 ---
+bot.run(TOKEN)
