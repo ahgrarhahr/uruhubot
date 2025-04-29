@@ -92,13 +92,19 @@ async def on_reaction_add(reaction, user):
             game_data['players'].append(user)
             await update_embed_players()
 
-        # 最低3人参加し、主催者が開始リアクションを押したらゲーム開始
-        if len(game_data['players']) >= 3 and game_data['organizer'] == reaction.message.author:
-            # 主催者が開始リアクションを押した時のみゲーム開始
-            if not any(reaction.message.reactions and r.emoji == '✅' for r in reaction.message.reactions):
-                await reaction.message.add_reaction('✅')  # 主催者用の開始リアクションを追加
-            if len(game_data['players']) >= 3 and '✅' in [r.emoji for r in reaction.message.reactions]:
-                await start_game(reaction.message.channel)
+        # 参加人数が3人未満の場合、主催者に説明メッセージ
+        if len(game_data['players']) < 3:
+            await game_data['message_embed'].channel.send(f'{game_data["organizer"].mention} ゲーム開始には最低3人の参加者が必要です。')
+
+        # 参加人数が3人以上の場合、主催者が「✅」を押すとゲームが開始されるように
+        if len(game_data['players']) >= 3:
+            await game_data['message_embed'].channel.send(f'{game_data["organizer"].mention} 3人以上の参加者が集まりました！主催者が「✅」を押してゲームを開始してください。')
+
+    elif reaction.emoji == '✅' and user == game_data['organizer']:  # 主催者が開始リアクションを押す
+        if len(game_data['players']) < 3:
+            await reaction.message.channel.send(f'{game_data["organizer"].mention} ゲーム開始には最低3人の参加者が必要です。')
+            return
+        await start_game(reaction.message.channel)
 
 async def update_embed_players():
     embed = game_data['message_embed'].embeds[0]
