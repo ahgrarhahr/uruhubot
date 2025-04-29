@@ -21,7 +21,7 @@ game_data = {
     'votes': {},
     'voted_users': set(),
     'words': {},
-    'theme': '',
+    'theme': '',  # 初期状態ではランダム
     'citizen_word': '',
     'wolf_word': '',
     'vote_message': None,
@@ -61,7 +61,9 @@ async def word_wolf(interaction: discord.Interaction):
     game_data['words'] = {}
     game_data['vote_message'] = None
     game_data['vote_start_time'] = None
-    game_data['theme'] = 'APEX'  # デフォルトのお題をAPEXに設定
+
+    # ランダムなお題を設定
+    game_data['theme'] = random.choice(list(theme_pool.keys()))  
 
     embed = discord.Embed(title='ワードウルフ参加者募集！',
                           description=f'お題：{game_data["theme"]}\n\nリアクションで参加してください。\n\n**全員の参加が終わったら、主催者が ✅ を押してゲームを開始します。**\n（最低3人以上必要です）',
@@ -216,13 +218,19 @@ def reset_game():
         'votes': {},
         'voted_users': set(),
         'words': {},
-        'theme': '',
+        'theme': '',  # 初期状態ではランダム
         'citizen_word': '',
         'wolf_word': '',
         'vote_message': None,
         'vote_start_time': None,
         'message_embed': None
     })
+
+@bot.tree.command(name="お題一覧", description="ゲームのお題一覧を表示します")
+async def お題一覧(interaction: discord.Interaction):
+    theme_names = '\n'.join(theme_pool.keys())
+    embed = discord.Embed(title="お題一覧", description=theme_names, color=0x00ffcc)
+    await interaction.response.send_message(embed=embed)
 
 @bot.tree.command(name="お題変更", description="ゲームのお題を変更します")
 async def お題変更(interaction: discord.Interaction, theme_name: str):
