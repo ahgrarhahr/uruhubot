@@ -228,4 +228,27 @@ def reset_game():
         'message_embed': None
     })
 
+# 新しいコマンドを追加
+@bot.tree.command(name="お題一覧", description="利用可能なお題の一覧を表示します")
+async def お題一覧(interaction: discord.Interaction):
+    theme_list = "\n".join(theme_pool.keys())
+    await interaction.response.send_message(f"利用可能なお題:\n{theme_list}")
+
+@bot.tree.command(name="お題変更", description="お題を変更します")
+async def お題変更(interaction: discord.Interaction, new_theme: str):
+    if interaction.user != game_data['organizer']:
+        await interaction.response.send_message('主催者のみお題を変更できます')
+        return
+
+    if game_data['vote_message']:
+        await interaction.response.send_message('ゲームが開始されたためお題は変更できません')
+        return
+
+    if new_theme not in theme_pool:
+        await interaction.response.send_message('そのお題は存在しません。')
+        return
+
+    game_data['theme'] = new_theme
+    await interaction.response.send_message(f"お題が「{new_theme}」に変更されました。")
+
 bot.run(TOKEN)
