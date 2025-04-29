@@ -61,10 +61,10 @@ async def word_wolf(interaction: discord.Interaction):
     game_data['words'] = {}
     game_data['vote_message'] = None
     game_data['vote_start_time'] = None
-    game_data['theme'] = 'ランダム'
+    game_data['theme'] = 'APEX'  # デフォルトのお題をAPEXに設定
 
     embed = discord.Embed(title='ワードウルフ参加者募集！',
-                          description='お題：ランダム\n\nリアクションで参加してください。\n\n**全員の参加が終わったら、主催者が ✅ を押してゲームを開始します。**\n（最低3人以上必要です）',
+                          description=f'お題：{game_data["theme"]}\n\nリアクションで参加してください。\n\n**全員の参加が終わったら、主催者が ✅ を押してゲームを開始します。**\n（最低3人以上必要です）',
                           color=0x00ff00)
     embed.add_field(name='参加プレイヤー', value='なし')
     message = await interaction.channel.send(embed=embed)
@@ -121,14 +121,11 @@ async def update_embed_players():
     embed = game_data['message_embed'].embeds[0]
     player_names = '\n'.join(f'・{p.name}' for p in game_data['players'])
     embed.set_field_at(0, name='参加プレイヤー', value=player_names or 'なし')
+    embed.set_field_at(1, name='お題', value=game_data['theme'])  # お題を更新
     await game_data['message_embed'].edit(embed=embed)
 
 async def start_game(channel):
-    if game_data['theme'] == 'ランダム':
-        theme = random.choice(list(theme_pool.keys()))
-    else:
-        theme = game_data['theme']
-
+    theme = game_data['theme']  # お題を変更されたものに更新
     words = theme_pool[theme]
     selected = random.sample(words, 2)
     citizen_word, wolf_word = selected
@@ -143,7 +140,6 @@ async def start_game(channel):
         except:
             pass
 
-    game_data['theme'] = theme
     game_data['citizen_word'] = citizen_word
     game_data['wolf_word'] = wolf_word
 
@@ -228,27 +224,15 @@ def reset_game():
         'message_embed': None
     })
 
-# 新しいコマンドを追加
-@bot.tree.command(name="お題一覧", description="利用可能なお題の一覧を表示します")
-async def お題一覧(interaction: discord.Interaction):
-    theme_list = "\n".join(theme_pool.keys())
-    await interaction.response.send_message(f"利用可能なお題:\n{theme_list}")
-
-@bot.tree.command(name="お題変更", description="お題を変更します")
-async def お題変更(interaction: discord.Interaction, new_theme: str):
-    if interaction.user != game_data['organizer']:
-        await interaction.response.send_message('主催者のみお題を変更できます')
+@bot.tree.command(name="お題変更", description="ゲームのお題を変更します")
+async def お題変更(interaction: discord.Interaction, theme_name: str):
+    if theme_name not in theme_pool:
+        await interaction.response.send_message(f'お題「{theme_name}」は存在しません。')
         return
-
-    if game_data['vote_message']:
-        await interaction.response.send_message('ゲームが開始されたためお題は変更できません')
-        return
-
-    if new_theme not in theme_pool:
-        await interaction.response.send_message('そのお題は存在しません。')
-        return
-
-    game_data['theme'] = new_theme
-    await interaction.response.send_message(f"お題が「{new_theme}」に変更されました。")
+    
+    game_data['theme'] = theme_name
+    # 参加者募集メッセージの埋め込みを編集
+    await update_embed_players()
+    await interaction.response.send_message(f'お題が「{theme_name}」に変更されました！')
 
 bot.run(TOKEN)
