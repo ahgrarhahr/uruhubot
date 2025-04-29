@@ -14,7 +14,7 @@ intents.message_content = True
 intents.reactions = True
 intents.members = True
 
-# コマンドプレフィックスを複数指定（!と/両方を使える）
+# コマンドプレフィックスを!と/両方使えるように設定
 bot = commands.Bot(command_prefix=['!', '/'], intents=intents)
 
 # --- データ保持用 ---
