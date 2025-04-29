@@ -49,7 +49,7 @@ theme_pool = load_themes()
 @bot.event
 async def on_ready():
     print(f'{bot.user} has connected to Discord!')
-    
+
     # スラッシュコマンドをグローバルに登録する
     await bot.tree.sync()
 
@@ -59,7 +59,7 @@ async def word_wolf(interaction: discord.Interaction):
     if game_data['organizer']:
         await interaction.response.send_message('すでにゲームが進行中です')
         return
-    
+
     game_data['organizer'] = interaction.user
     game_data['players'] = []
     game_data['votes'] = {}
@@ -76,7 +76,8 @@ async def word_wolf(interaction: discord.Interaction):
     embed.add_field(name='参加プレイヤー', value='なし')
     message = await interaction.channel.send(embed=embed)
     game_data['message_embed'] = message
-    await message.add_reaction('👍')  # 「いいね」のリアクションを付ける
+    await message.add_reaction('👍')  # いいねで参加
+    await message.add_reaction('✅')  # 主催者用の開始リアクション
 
 @bot.event
 async def on_reaction_add(reaction, user):
@@ -93,7 +94,11 @@ async def on_reaction_add(reaction, user):
 
         # 最低3人参加し、主催者が開始リアクションを押したらゲーム開始
         if len(game_data['players']) >= 3 and game_data['organizer'] == reaction.message.author:
-            await start_game(reaction.message.channel)
+            # 主催者が開始リアクションを押した時のみゲーム開始
+            if not any(reaction.message.reactions and r.emoji == '✅' for r in reaction.message.reactions):
+                await reaction.message.add_reaction('✅')  # 主催者用の開始リアクションを追加
+            if len(game_data['players']) >= 3 and '✅' in [r.emoji for r in reaction.message.reactions]:
+                await start_game(reaction.message.channel)
 
 async def update_embed_players():
     embed = game_data['message_embed'].embeds[0]
@@ -132,6 +137,7 @@ async def start_game(channel):
                           description=f'カテゴリー：{theme}\n\n参加プレイヤー：\n{player_list}\n\n議論を始めてください！',
                           color=0xff0000)
     await channel.send(embed=embed)
+    await game_data['message_embed'].clear_reactions()
 
 @bot.tree.command(name="投票", description="ウルフを投票で見つけましょう")
 async def 投票(interaction: discord.Interaction):
@@ -140,7 +146,7 @@ async def 投票(interaction: discord.Interaction):
         return
 
     desc = '\n'.join([f'{i+1}. {p.name}' for i, p in enumerate(game_data['players'])])
-    embed = discord.Embed(title='投票を始めます', description='リアクションで投票してください（1つのみ選択）\n\n' + desc, color=0x00ffcc)
+    embed = discord.Embed(title='投票を始めます', description='リアクションで投票してください\n\n' + desc, color=0x00ffcc)
     vote_msg = await interaction.channel.send(embed=embed)
     game_data['vote_message'] = vote_msg
     game_data['votes'] = {i: 0 for i in range(len(game_data['players']))}
