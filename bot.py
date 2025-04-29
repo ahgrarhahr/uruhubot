@@ -21,13 +21,15 @@ game_data = {
     'votes': {},
     'voted_users': set(),
     'words': {},
-    'theme': '',  # 初期状態ではランダム
+    'theme': '',
     'citizen_word': '',
     'wolf_word': '',
     'vote_message': None,
     'vote_start_time': None,
     'message_embed': None
 }
+
+from collections import defaultdict
 
 def load_themes():
     themes = {}
@@ -44,11 +46,7 @@ theme_pool = load_themes()
 @bot.event
 async def on_ready():
     print(f'{bot.user} has connected to Discord!')
-    try:
-        synced = await bot.tree.sync()
-        print(f'Synced {len(synced)} command(s)')
-    except Exception as e:
-        print(f'Failed to sync commands: {e}')
+    await bot.tree.sync()
 
 @bot.tree.command(name="ワードウルフ", description="ワードウルフゲームを開始します")
 async def word_wolf(interaction: discord.Interaction):
@@ -56,19 +54,22 @@ async def word_wolf(interaction: discord.Interaction):
         await interaction.response.send_message('すでにゲームが進行中です')
         return
 
-    game_data['organizer'] = interaction.user
-    game_data['players'] = []
-    game_data['votes'] = {}
-    game_data['voted_users'] = set()
-    game_data['words'] = {}
-    game_data['vote_message'] = None
-    game_data['vote_start_time'] = None
-
-    # ランダムなお題を仮で設定
-    game_data['theme'] = 'ランダム'
+    game_data.update({
+        'organizer': interaction.user,
+        'players': [],
+        'votes': {},
+        'voted_users': set(),
+        'words': {},
+        'theme': '',  # ランダムには選ばない（あとで決める）
+        'citizen_word': '',
+        'wolf_word': '',
+        'vote_message': None,
+        'vote_start_time': None,
+        'message_embed': None
+    })
 
     embed = discord.Embed(title='ワードウルフ参加者募集！',
-                          description='お題：ランダム（後で変更可能）\n\nリアクションで参加してください。\n\n**全員の参加が終わったら、主催者が ✅ を押してゲームを開始します。**\n（最低3人以上必要です）',
+                          description='お題：ランダム（あとで変更可能）\n\nリアクションで参加してください。\n\n**全員の参加が終わったら、主催者が ✅ を押してゲームを開始します。**\n（最低3人以上必要です）',
                           color=0x00ff00)
     embed.add_field(name='参加プレイヤー', value='なし')
     message = await interaction.channel.send(embed=embed)
@@ -124,13 +125,14 @@ async def on_reaction_add_vote(message, emoji, user):
 async def update_embed_players():
     embed = game_data['message_embed'].embeds[0]
     player_names = '\n'.join(f'・{p.name}' for p in game_data['players'])
+    theme_text = game_data['theme'] if game_data['theme'] else 'ランダム（あとで変更可能）'
     embed.set_field_at(0, name='参加プレイヤー', value=player_names or 'なし')
-    embed.description = f'お題：{game_data["theme"]}（後で変更可能）\n\nリアクションで参加してください。\n\n**全員の参加が終わったら、主催者が ✅ を押してゲームを開始します。**\n（最低3人以上必要です）'
+    embed.description = f'お題：{theme_text}\n\nリアクションで参加してください。\n\n**全員の参加が終わったら、主催者が ✅ を押してゲームを開始します。**\n（最低3人以上必要です）'
     await game_data['message_embed'].edit(embed=embed)
 
 async def start_game(channel):
     theme = game_data['theme']
-    if theme == 'ランダム':
+    if not theme:
         theme = random.choice(list(theme_pool.keys()))
         game_data['theme'] = theme
 
@@ -213,7 +215,6 @@ async def show_result(channel):
 
     embed = discord.Embed(title="投票結果", description=result_text, color=0xff0000)
     await channel.send(embed=embed)
-
     reset_game()
 
 def reset_game():
@@ -232,41 +233,24 @@ def reset_game():
         'message_embed': None
     })
 
+@bot.command(name="お題変更")
+async def お題変更(ctx, *, theme_name: str):
+    if not game_data['organizer']:
+        await ctx.send("まだゲームが開始されていません")
+        return
+
+    if theme_name not in theme_pool:
+        await ctx.send(f'お題「{theme_name}」は存在しません。')
+        return
+
+    game_data['theme'] = theme_name
+    await update_embed_players()
+    await ctx.send(f'お題が「{theme_name}」に変更されました！')
+
 @bot.tree.command(name="お題一覧", description="ゲームのお題一覧を表示します")
 async def お題一覧(interaction: discord.Interaction):
     theme_names = '\n'.join(theme_pool.keys())
     embed = discord.Embed(title="お題一覧", description=theme_names, color=0x00ffcc)
     await interaction.response.send_message(embed=embed)
-
-# --- メッセージコマンド: !お題変更 [お題名] ---
-@bot.event
-async def on_message(message):
-    if message.author.bot:
-        return
-
-    if message.content.startswith("!お題変更"):
-        if not game_data['organizer']:
-            await message.channel.send("ゲームが開始されていません。まず `/ワードウルフ` で開始してください。")
-            return
-
-        if game_data['message_embed'] is None:
-            await message.channel.send("埋め込みメッセージが見つかりません。")
-            return
-
-        parts = message.content.split(maxsplit=1)
-        if len(parts) != 2:
-            await message.channel.send("使い方：`!お題変更 [お題名]`")
-            return
-
-        theme_name = parts[1].strip()
-        if theme_name not in theme_pool:
-            await message.channel.send(f'お題「{theme_name}」は存在しません。')
-            return
-
-        game_data['theme'] = theme_name
-        await update_embed_players()
-        await message.channel.send(f'お題が「{theme_name}」に変更されました！')
-
-    await bot.process_commands(message)
 
 bot.run(TOKEN)
