@@ -76,7 +76,7 @@ async def word_wolf(interaction: discord.Interaction):
     embed.add_field(name='参加プレイヤー', value='なし')
     message = await interaction.channel.send(embed=embed)
     game_data['message_embed'] = message
-    await message.add_reaction('✅')
+    await message.add_reaction('👍')  # 「いいね」のリアクションを付ける
 
 @bot.event
 async def on_reaction_add(reaction, user):
@@ -86,18 +86,14 @@ async def on_reaction_add(reaction, user):
     if reaction.message.id != getattr(game_data['message_embed'], 'id', None):
         return
 
-    if reaction.emoji == '✅':
-        if user != game_data['organizer']:
-            return
-        if len(game_data['players']) < 3:
-            await reaction.message.channel.send('開始するには最低3人参加する必要があります')
-            return
-        await start_game(reaction.message.channel)
-        return
+    if reaction.emoji == '👍':  # 「いいね」ボタンで参加
+        if user not in game_data['players']:
+            game_data['players'].append(user)
+            await update_embed_players()
 
-    if user not in game_data['players']:
-        game_data['players'].append(user)
-        await update_embed_players()
+        # 最低3人参加し、主催者が開始リアクションを押したらゲーム開始
+        if len(game_data['players']) >= 3 and game_data['organizer'] == reaction.message.author:
+            await start_game(reaction.message.channel)
 
 async def update_embed_players():
     embed = game_data['message_embed'].embeds[0]
@@ -122,7 +118,7 @@ async def start_game(channel):
         word = wolf_word if p == wolf else citizen_word
         game_data['words'][p.id] = word
         try:
-            await p.send(f'あなたのワードは「{word}」です。')
+            await p.send(f'お題: {theme}\nあなたのワードは「{word}」です。')
         except:
             pass
 
@@ -144,7 +140,7 @@ async def 投票(interaction: discord.Interaction):
         return
 
     desc = '\n'.join([f'{i+1}. {p.name}' for i, p in enumerate(game_data['players'])])
-    embed = discord.Embed(title='投票を始めます', description='リアクションで投票してください\n\n' + desc, color=0x00ffcc)
+    embed = discord.Embed(title='投票を始めます', description='リアクションで投票してください（1つのみ選択）\n\n' + desc, color=0x00ffcc)
     vote_msg = await interaction.channel.send(embed=embed)
     game_data['vote_message'] = vote_msg
     game_data['votes'] = {i: 0 for i in range(len(game_data['players']))}
