@@ -32,13 +32,13 @@ game_data = {
 from collections import defaultdict
 
 def load_themes():
-    themes = defaultdict(list)
+    themes = {}
     with open('お題.txt', 'r', encoding='utf-8') as f:
         for line in f:
-            parts = line.strip().split(',')
-            if len(parts) >= 3:
-                theme, *words = parts
-                themes[theme].extend(words)
+            parts = line.strip().split('|')
+            if len(parts) == 2:
+                theme, words = parts
+                themes[theme] = words.split(',')
     return themes
 
 theme_pool = load_themes()
