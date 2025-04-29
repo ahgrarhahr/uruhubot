@@ -139,7 +139,7 @@ async def start_game(channel):
         word = wolf_word if p == wolf else citizen_word
         game_data['words'][p.id] = word
         try:
-            await p.send(f'お題: {theme}\nあなたのワードは「{word}」です。')
+            await p.send(f'お題: **{theme}**\nあなたのワードは「{word}」です。')
         except:
             pass
 
