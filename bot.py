@@ -66,7 +66,7 @@ async def word_wolf(interaction: discord.Interaction):
     game_data['theme'] = random.choice(list(theme_pool.keys()))  
 
     embed = discord.Embed(title='ワードウルフ参加者募集！',
-                          description=f'お題：{game_data["theme"]}\n\nリアクションで参加してください。\n\n**全員の参加が終わったら、主催者が ✅ を押してゲームを開始します。**\n（最低3人以上必要です）',
+                          description=f'お題はランダムで選ばれます。\n\nリアクションで参加してください。\n\n**全員の参加が終わったら、主催者が ✅ を押してゲームを開始します。**\n（最低3人以上必要です）',
                           color=0x00ff00)
     embed.add_field(name='参加プレイヤー', value='なし')
     message = await interaction.channel.send(embed=embed)
@@ -236,6 +236,10 @@ async def お題一覧(interaction: discord.Interaction):
 async def お題変更(interaction: discord.Interaction, theme_name: str):
     if theme_name not in theme_pool:
         await interaction.response.send_message(f'お題「{theme_name}」は存在しません。')
+        return
+    
+    if game_data['organizer'] and game_data['theme']:
+        await interaction.response.send_message(f'ゲームが開始されているため、お題は変更できません。')
         return
     
     game_data['theme'] = theme_name
