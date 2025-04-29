@@ -253,4 +253,28 @@ async def お題一覧(interaction: discord.Interaction):
     embed = discord.Embed(title="お題一覧", description=theme_names, color=0x00ffcc)
     await interaction.response.send_message(embed=embed)
 
+# 新しい終了コマンドの実装
+@bot.tree.command(name="終了", description="ワードウルフゲームを終了します")
+async def 終了(interaction: discord.Interaction):
+    if not game_data['organizer']:
+        await interaction.response.send_message("ゲームが開始されていません")
+        return
+
+    if interaction.user != game_data['organizer']:
+        await interaction.response.send_message("このコマンドは主催者のみ実行できます")
+        return
+
+    players = game_data['players']
+    wolf = next(p for p in players if game_data['words'][p.id] == game_data['wolf_word'])
+    
+    result_text = f"ゲームが終了しました！\n\n"
+    result_text += f"ウルフのワードは「{game_data['wolf_word']}」\n"
+    result_text += f"市民のワードは「{game_data['citizen_word']}」\n"
+    result_text += f"ウルフは {wolf.name} さんでした！\n"
+
+    embed = discord.Embed(title="ゲーム終了", description=result_text, color=0xff0000)
+    await interaction.channel.send(embed=embed)
+
+    reset_game()  # ゲームの状態をリセット
+
 bot.run(TOKEN)
