@@ -206,7 +206,7 @@ async def show_result(channel):
     chosen = players[chosen_index]
     wolf = next(p for p in players if game_data['words'][p.id] == game_data['wolf_word'])
 
-    result_text = f'もっとも投票されたのは {chosen.name} さんでした。\n\n'
+    result_text = f'もっとも投票されたのは {chosen.name} さんでした。得票数：{votes[chosen_index]}票\n\n'
     result_text += f'ウルフのワードは「{game_data["wolf_word"]}」\n市民のワードは「{game_data["citizen_word"]}」\n\n'
     result_text += f'ウルフは {wolf.name} さんでした！\n\n'
 
@@ -215,7 +215,8 @@ async def show_result(channel):
     else:
         result_text += 'ウルフの勝ち！ 🐺'
 
-    await channel.send(result_text)
+    embed = discord.Embed(title="投票結果", description=result_text, color=0xff0000)
+    await channel.send(embed=embed)
 
 def reset_game():
     game_data.clear()
