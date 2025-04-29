@@ -46,7 +46,6 @@ theme_pool = load_themes()
 @bot.event
 async def on_ready():
     print(f'{bot.user} has connected to Discord!')
-    await bot.tree.sync()
 
 @bot.tree.command(name="ワードウルフ", description="ワードウルフゲームを開始します")
 async def word_wolf(interaction: discord.Interaction):
@@ -140,34 +139,33 @@ async def 投票(interaction: discord.Interaction):
         await interaction.response.send_message('ゲームに参加していません')
         return
 
+    # 投票開始の処理
     desc = '\n'.join([f'{i+1}. {p.name}' for i, p in enumerate(game_data['players'])])
     embed = discord.Embed(title='投票を始めます', description='リアクションで投票してください\n\n' + desc, color=0x00ffcc)
     vote_msg = await interaction.channel.send(embed=embed)
     game_data['vote_message'] = vote_msg
     game_data['votes'] = {i: 0 for i in range(len(game_data['players']))}
-    game_data['voted_users'] = set()
+    game_data['voted_users'] = set()  # 既に投票したユーザーを保持
     game_data['vote_start_time'] = discord.utils.utcnow()
 
     for i in range(len(game_data['players'])):
         await vote_msg.add_reaction(f'{i+1}⃣')
 
-@bot.tree.command(name="結果", description="投票結果を表示します")
-async def 結果(interaction: discord.Interaction):
-    if interaction.user != game_data['organizer']:
-        await interaction.response.send_message('主催者だけが実行できます')
-        return
+    # 投票が完了したか確認する
+    await check_vote_progress()
 
-    if not game_data['vote_start_time']:
-        await interaction.response.send_message('まだ投票が開始されていません')
-        return
-
-    if (discord.utils.utcnow() - game_data['vote_start_time']).total_seconds() < 60:
-        await interaction.response.send_message('投票開始から1分経っていません')
-        return
-
-    await show_result(interaction.channel)
+async def check_vote_progress():
+    # 投票が終了したかチェック
+    if len(game_data['voted_users']) == len(game_data['players']):
+        # すべてのプレイヤーが投票したら結果を表示
+        await show_result(game_data['vote_message'].channel)
+    else:
+        # 投票が完了していない場合、定期的にチェックを続ける
+        await discord.utils.sleep_until(discord.utils.utcnow() + discord.Duration(seconds=5))
+        await check_vote_progress()
 
 async def show_result(channel):
+    # 結果を表示
     votes = game_data['votes']
     players = game_data['players']
 
@@ -239,23 +237,15 @@ async def 終了(interaction: discord.Interaction):
 
     players = game_data['players']
     theme = game_data['theme'] or "（不明）"
-    wolf = next((p for p in players if game_data['words'].get(p.id) == game_data['wolf_word']), None)
+    wolf = next((p for p in players if game_data['words'][p.id] == game_data['wolf_word']), None)
+    if wolf:
+        word = game_data['wolf_word']
+    else:
+        word = "なし"
 
-    if not wolf:
-        await interaction.response.send_message("ゲームがまだ開始されていないか、ウルフが決まっていません")
-        return
-
-    result_text = (
-        f"ゲームは中断されました。\n\n"
-        f"お題：{theme}\n"
-        f"市民のワード：**{game_data['citizen_word']}**\n"
-        f"ウルフのワード：**{game_data['wolf_word']}**\n\n"
-        f"ウルフは **{wolf.name}** さんでした。"
-    )
-
-    embed = discord.Embed(title="ゲーム終了", description=result_text, color=0x808080)
+    embed = discord.Embed(title="ゲーム終了", description=f'お題：{theme}\nウルフ：{wolf.name if wolf else "なし"}\n市民のワード：{game_data["citizen_word"]}\nウルフのワード：{word}',
+                          color=0xff0000)
     await interaction.response.send_message(embed=embed)
-
     reset_game()
 
 bot.run(TOKEN)
