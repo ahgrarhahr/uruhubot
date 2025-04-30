@@ -52,7 +52,7 @@ async def on_ready():
 @bot.tree.command(name="ワードウルフ", description="ワードウルフゲームを開始します")
 async def word_wolf(interaction: discord.Interaction):
     # 応答を保留にすることでタイムアウトを防ぐ
-    await interaction.response.defer()
+    await interaction.response.defer(ephemeral=True)
 
     if game_data['organizer']:
         await interaction.followup.send('すでにゲームが進行中です')
@@ -73,7 +73,7 @@ async def word_wolf(interaction: discord.Interaction):
         'message_embed': None
     })
 
-    # 埋め込みメッセージを作成して送信
+    # ここで埋め込みメッセージを送信する
     embed = discord.Embed(title='ワードウルフ参加者募集！',
                           description='お題：ランダム（あとで変更可能）\n\nリアクションで参加してください。\n\n**全員の参加が終わったら、主催者が ✅ を押してゲームを開始します。**\n（最低3人以上必要です）',
                           color=0x00ff00)
