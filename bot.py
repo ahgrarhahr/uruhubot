@@ -51,8 +51,10 @@ async def on_ready():
 
 @bot.tree.command(name="ワードウルフ", description="ワードウルフゲームを開始します")
 async def word_wolf(interaction: discord.Interaction):
+    await interaction.response.defer()  # これを最初に追加
+
     if game_data['organizer']:
-        await interaction.response.send_message('すでにゲームが進行中です')
+        await interaction.followup.send('すでにゲームが進行中です')
         return
 
     game_data.update({
