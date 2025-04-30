@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
-ROLE_ID = int(os.getenv("ROLE_ID"))
+ROLE_ID = int(os.getenv("ROLE_ID"))  # 特定のロールIDを環境変数から取得
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -61,7 +61,7 @@ async def word_wolf(interaction: discord.Interaction):
         'votes': {},
         'voted_users': set(),
         'words': {},
-        'theme': '',
+        'theme': '',  # ランダムには選ばない（あとで決める）
         'citizen_word': '',
         'wolf_word': '',
         'vote_message': None,
@@ -161,14 +161,16 @@ async def start_game(channel):
     await channel.send(embed=embed)
     await game_data['message_embed'].clear_reactions()
 
+    # 特定のロールを持つユーザーに役職情報をDMで送信
     role = discord.utils.get(channel.guild.roles, id=ROLE_ID)
     if role:
+        role_members = [member for member in role.members]
         embed_roles = discord.Embed(title="ゲームの役職情報", color=0x00ff00)
         for player in game_data['players']:
             role_text = "市民" if game_data['words'][player.id] == game_data['citizen_word'] else "ウルフ"
             embed_roles.add_field(name=player.name, value=role_text, inline=False)
 
-        for member in role.members:
+        for member in role_members:
             try:
                 await member.send(embed=embed_roles)
             except:
@@ -247,26 +249,6 @@ def reset_game():
         'message_embed': None
     })
 
-@bot.command(name="お題変更")
-async def お題変更(ctx, *, theme_name: str):
-    if not game_data['organizer']:
-        await ctx.send("まだゲームが開始されていません")
-        return
-
-    if theme_name not in theme_pool:
-        await ctx.send(f'お題「{theme_name}」は存在しません。')
-        return
-
-    game_data['theme'] = theme_name
-    await update_embed_players()
-    await ctx.send(f'お題が「{theme_name}」に変更されました！')
-
-@bot.tree.command(name="お題一覧", description="ゲームのお題一覧を表示します")
-async def お題一覧(interaction: discord.Interaction):
-    theme_names = '\n'.join(theme_pool.keys())
-    embed = discord.Embed(title="お題一覧", description=theme_names, color=0x00ffcc)
-    await interaction.response.send_message(embed=embed)
-
 @bot.tree.command(name="終了", description="ワードウルフゲームを終了します")
 async def 終了(interaction: discord.Interaction):
     if not game_data['organizer']:
@@ -277,10 +259,17 @@ async def 終了(interaction: discord.Interaction):
         await interaction.response.send_message("このコマンドは主催者のみ実行できます")
         return
 
-    wolf = next(p for p in game_data['players'] if game_data['words'][p.id] == game_data['wolf_word'])
-    result_text = f"ゲームが終了しました！\n\nウルフのワードは「{game_data['wolf_word']}」\n市民のワードは「{game_data['citizen_word']}」\nウルフは {wolf.name} さんでした！"
-    embed = discord.Embed(title="ゲーム終了", description=result_text, color=0x999999)
+    players = game_data['players']
+    wolf = next(p for p in players if game_data['words'][p.id] == game_data['wolf_word'])
+    
+    result_text = f"ゲームが終了しました！\n\n"
+    result_text += f"ウルフのワードは「{game_data['wolf_word']}」\n"
+    result_text += f"市民のワードは「{game_data['citizen_word']}」\n"
+    result_text += f"ウルフは {wolf.name} さんでした！\n"
+
+    embed = discord.Embed(title="ゲーム終了", description=result_text, color=0xff0000)
     await interaction.channel.send(embed=embed)
-    reset_game()
+
+    reset_game()  # ゲームの状態をリセット
 
 bot.run(TOKEN)
