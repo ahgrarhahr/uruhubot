@@ -51,14 +51,10 @@ async def on_ready():
 
 @bot.tree.command(name="ワードウルフ", description="ワードウルフゲームを開始します")
 async def word_wolf(interaction: discord.Interaction):
-    # 応答を保留にすることでタイムアウトを防ぐ
-    await interaction.response.defer(ephemeral=True)
-
     if game_data['organizer']:
-        await interaction.followup.send('すでにゲームが進行中です')
+        await interaction.response.send_message('すでにゲームが進行中です')
         return
 
-    # ゲームの初期設定
     game_data.update({
         'organizer': interaction.user,
         'players': [],
@@ -73,7 +69,6 @@ async def word_wolf(interaction: discord.Interaction):
         'message_embed': None
     })
 
-    # ここで埋め込みメッセージを送信する
     embed = discord.Embed(title='ワードウルフ参加者募集！',
                           description='お題：ランダム（あとで変更可能）\n\nリアクションで参加してください。\n\n**全員の参加が終わったら、主催者が ✅ を押してゲームを開始します。**\n（最低3人以上必要です）',
                           color=0x00ff00)
@@ -254,6 +249,27 @@ def reset_game():
         'message_embed': None
     })
 
+@bot.command(name="お題変更")
+async def お題変更(ctx, *, theme_name: str):
+    if not game_data['organizer']:
+        await ctx.send("まだゲームが開始されていません")
+        return
+
+    if theme_name not in theme_pool:
+        await ctx.send(f'お題「{theme_name}」は存在しません。')
+        return
+
+    game_data['theme'] = theme_name
+    await update_embed_players()
+    await ctx.send(f'お題が「{theme_name}」に変更されました！')
+
+@bot.tree.command(name="お題一覧", description="ゲームのお題一覧を表示します")
+async def お題一覧(interaction: discord.Interaction):
+    theme_names = '\n'.join(theme_pool.keys())
+    embed = discord.Embed(title="お題一覧", description=theme_names, color=0x00ffcc)
+    await interaction.response.send_message(embed=embed)
+
+# 新しい終了コマンドの実装
 @bot.tree.command(name="終了", description="ワードウルフゲームを終了します")
 async def 終了(interaction: discord.Interaction):
     if not game_data['organizer']:
