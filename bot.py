@@ -269,17 +269,19 @@ async def show_result(channel):
 
     # リプレイ選択用のボタンビュー
     class ReplayView(discord.ui.View):
-        @discord.ui.button(label='YES', style=discord.ButtonStyle.success)
-        async def yes_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-            # ゲームを最初からリセット
-            reset_game()
-            await interaction.response.send_message("新しいゲームを始めます！", ephemeral=True)
-            await word_wolf(interaction)  # 最初のゲーム開始コマンドを呼び出し
+    @discord.ui.button(label='YES', style=discord.ButtonStyle.success)
+    async def yes_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # ゲームをリセットして最初から開始
+        reset_game()
+        game_data['organizer'] = interaction.user  # 新しい主催者を設定
+        await interaction.response.send_message("新しいゲームを始めます！", ephemeral=True)
+        # 最初の参加募集メッセージを送信
+        await word_wolf(interaction)
 
-        @discord.ui.button(label='NO', style=discord.ButtonStyle.danger)
-        async def no_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-            await interaction.response.send_message("ゲームを終了します。お疲れさまでした！", ephemeral=True)
-            reset_game()
+    @discord.ui.button(label='NO', style=discord.ButtonStyle.danger)
+    async def no_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("ゲームを終了します。お疲れさまでした！", ephemeral=True)
+        reset_game()
 
     # 結果発表後に「もう一度やりますか？」メッセージを送信
     replay_embed = discord.Embed(
