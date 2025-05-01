@@ -245,15 +245,15 @@ async def show_result(channel):
     votes = game_data['votes']
     players = game_data['players']
 
-    # 投票結果の集計
+    # 投票の結果を集計
     max_votes = max(votes.values())
     candidates = [i for i, v in votes.items() if v == max_votes]
-    chosen_index = candidates[0]
+    chosen_index = candidates[0]  # 最も得票が多いプレイヤーのインデックスを選択
 
     chosen = players[chosen_index]
-    wolf = next(p for p in players if game_data['words'][p.id] == game_data['wolf_word'])
+    wolf = next(p for p in players if game_data['words'][p.id] == game_data['wolf_word'])  # ウルフを特定
 
-    # 結果メッセージの作成
+    # 結果メッセージの構築
     result_text = f'🗳️ **最多得票者**: {chosen.name} (得票数: {votes[chosen_index]}票)\n\n'
     result_text += f'🐺 **ウルフのワード**: 「{game_data["wolf_word"]}」\n'
     result_text += f'🛡️ **市民のワード**: 「{game_data["citizen_word"]}」\n\n'
@@ -264,33 +264,14 @@ async def show_result(channel):
     else:
         result_text += '🐺 **ウルフの勝利！** 🐾'
 
+    # 埋め込みメッセージの送信
     embed = discord.Embed(title="🎊 結果発表！", description=result_text, color=0xff0000)
     await channel.send(embed=embed)
 
-    # リプレイ選択用のボタンビュー
-  class ReplayView(discord.ui.View):
-    @discord.ui.button(label='YES', style=discord.ButtonStyle.success)
-    async def yes_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        reset_game()
-        game_data['organizer'] = interaction.user
-        await interaction.response.send_message("新しいゲームを始めます！", ephemeral=True)
-        await word_wolf(interaction)
-
-    @discord.ui.button(label='NO', style=discord.ButtonStyle.danger)
-    async def no_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message("ゲームを終了します。お疲れさまでした！", ephemeral=True)
-        reset_game()
-        
-    # 結果発表後に「もう一度やりますか？」メッセージを送信
-    replay_embed = discord.Embed(
-        title="🔄 もう一度やりますか？",
-        description="ゲームを続けますか？YES または NO を選んでください。",
-        color=0x00ffcc
-    )
-    await channel.send(embed=replay_embed, view=ReplayView())
+    # ゲームデータをリセット
+    reset_game()
 
 def reset_game():
-    # ゲームデータのリセット
     game_data.clear()
     game_data.update({
         'organizer': None,
