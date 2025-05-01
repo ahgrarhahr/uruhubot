@@ -90,17 +90,10 @@ async def word_wolf(interaction: discord.Interaction):
             await interaction2.response.defer()
             await start_game(interaction.channel)
 
-    embed = discord.Embed(
-    title='🎮 ワードウルフに参加しよう！',
-    description=(
-        '**📝 お題：ランダム（あとで変更可能）**\n'
-        '\n'
-        '1. **「参加」ボタンをクリックしてプレイヤーとして参加しましょう！**\n'
-        '2. **全員が参加したら、主催者が「ゲーム開始」を押してください。（最低3人必要）**\n'
-    ),
-    color=0x00ff00
-)
-embed.add_field(name='現在の参加者リスト', value='誰も参加していません 🙃')
+    embed = discord.Embed(title='ワードウルフ参加者募集！',
+                          description='お題：ランダム（あとで変更可能）\n\n「参加」でプレイヤーとして参加してください。\n\n**全員の参加が終わったら、主催者が「ゲーム開始」を押してください。**\n（最低3人以上必要です）',
+                          color=0x00ff00)
+    embed.add_field(name='参加プレイヤー', value='なし')
     message = await interaction.channel.send(embed=embed, view=JoinView())
     game_data['message_embed'] = message
     await interaction.response.send_message("ゲームを開始します！", ephemeral=True)
@@ -147,16 +140,9 @@ async def start_game(channel):
     game_data['wolf_word'] = wolf_word
 
     player_list = '\n'.join(p.name for p in players)
-    embed = discord.Embed(
-    title='🚀 ゲームスタート！',
-    description=(
-        f'**カテゴリー**: {theme}\n'
-        f'👥 **参加プレイヤー**:\n{player_list}\n'
-        '\n'
-        '🕵️‍♂️ **議論を始めてください！**'
-    ),
-    color=0xff4500
-)
+    embed = discord.Embed(title='ゲーム開始！',
+                          description=f'カテゴリー：{theme}\n\n参加プレイヤー：\n{player_list}\n\n議論を始めてください！',
+                          color=0xff0000)
     await channel.send(embed=embed)
 
     # 特定のロールを持つユーザーに役職情報をDMで送信
@@ -207,15 +193,7 @@ async def 投票(interaction: discord.Interaction):
             return True
 
     desc = '\n'.join([f'{i+1}. {p.name}' for i, p in enumerate(game_data['players'])])
-   embed = discord.Embed(
-    title='🗳️ 投票タイム！',
-    description=(
-        '以下のボタンから投票を行ってください。\n'
-        '**誰がウルフか見つけ出そう！** 🐺\n\n'
-        + '\n'.join([f'{i+1}. {p.name}' for i, p in enumerate(game_data["players"])])
-    ),
-    color=0x00ffcc
-)
+    embed = discord.Embed(title='投票を始めます', description='下のボタンをクリックして投票してください\n\n' + desc, color=0x00ffcc)
     game_data['vote_message'] = await interaction.channel.send(embed=embed, view=VoteView())
     game_data['votes'] = {i: 0 for i in range(len(game_data['players']))}
     game_data['voted_users'] = set()
@@ -242,30 +220,24 @@ async def show_result(channel):
     votes = game_data['votes']
     players = game_data['players']
 
-    # 投票の結果を集計
     max_votes = max(votes.values())
     candidates = [i for i, v in votes.items() if v == max_votes]
-    chosen_index = candidates[0]  # 最も得票が多いプレイヤーのインデックスを選択
+    chosen_index = candidates[0]
 
     chosen = players[chosen_index]
-    wolf = next(p for p in players if game_data['words'][p.id] == game_data['wolf_word'])  # ウルフを特定
+    wolf = next(p for p in players if game_data['words'][p.id] == game_data['wolf_word'])
 
-    # 結果メッセージの構築
-    result_text = f'🗳️ **最多得票者**: {chosen.name} (得票数: {votes[chosen_index]}票)\n\n'
-    result_text += f'🐺 **ウルフのワード**: 「{game_data["wolf_word"]}」\n'
-    result_text += f'🛡️ **市民のワード**: 「{game_data["citizen_word"]}」\n\n'
-    result_text += f'🔍 **ウルフは** {wolf.name} さんでした！\n\n'
+    result_text = f'もっとも投票されたのは {chosen.name} さんでした。得票数：{votes[chosen_index]}票\n\n'
+    result_text += f'ウルフのワードは「{game_data["wolf_word"]}」\n市民のワードは「{game_data["citizen_word"]}」\n\n'
+    result_text += f'ウルフは {wolf.name} さんでした！\n\n'
 
     if chosen == wolf:
-        result_text += '🎉 **市民の勝利！** 🎊'
+        result_text += '市民の勝ち！ 🎉'
     else:
-        result_text += '🐺 **ウルフの勝利！** 🐾'
+        result_text += 'ウルフの勝ち！ 🐺'
 
-    # 埋め込みメッセージの送信
-    embed = discord.Embed(title="🎊 結果発表！", description=result_text, color=0xff0000)
+    embed = discord.Embed(title="投票結果", description=result_text, color=0xff0000)
     await channel.send(embed=embed)
-
-    # ゲームデータをリセット
     reset_game()
 
 def reset_game():
