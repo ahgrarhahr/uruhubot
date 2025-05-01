@@ -51,32 +51,37 @@ async def on_ready():
 
 @bot.tree.command(name="ワードウルフ", description="ワードウルフゲームを開始します")
 async def word_wolf(interaction: discord.Interaction):
+    # 既にゲーム中なら即返答
     if game_data['organizer']:
-        await interaction.response.send_message('すでにゲームが進行中です')
-        return
+        return await interaction.response.send_message('すでにゲームが進行中です', ephemeral=True)
 
+    # ゲーム初期化
     game_data.update({
         'organizer': interaction.user,
-        'players': [],
-        'votes': {},
-        'voted_users': set(),
-        'words': {},
-        'theme': '',  # ランダムには選ばない（あとで決める）
-        'citizen_word': '',
-        'wolf_word': '',
-        'vote_message': None,
-        'vote_start_time': None,
-        'message_embed': None
+        'players': [], 'votes': {}, 'voted_users': set(),
+        'words': {}, 'theme': '', 'citizen_word': '', 'wolf_word': '',
+        'vote_message': None, 'vote_start_time': None, 'message_embed': None
     })
 
-    embed = discord.Embed(title='ワードウルフ参加者募集！',
-                          description='お題：ランダム（あとで変更可能）\n\nリアクションで参加してください。\n\n**全員の参加が終わったら、主催者が ✅ を押してゲームを開始します。**\n（最低3人以上必要です）',
-                          color=0x00ff00)
+    # 埋め込みメッセージをレスポンスとして返す
+    embed = discord.Embed(
+        title='ワードウルフ参加者募集！',
+        description=(
+            'お題：ランダム（あとで変更可能）\n\n'
+            'リアクションで参加してください。\n\n'
+            '**主催者が ✅ を押すとゲーム開始**（最低3人必要）'
+        ),
+        color=0x00ff00
+    )
     embed.add_field(name='参加プレイヤー', value='なし')
-    message = await interaction.channel.send(embed=embed)
+    await interaction.response.send_message(embed=embed)
+
+    # 返されたレスポンスメッセージを取得してリアクション設置
+    message = await interaction.original_response()
     game_data['message_embed'] = message
     await message.add_reaction('👍')
     await message.add_reaction('✅')
+
 
 @bot.event
 async def on_reaction_add(reaction, user):
