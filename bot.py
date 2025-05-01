@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+from discord.ui import View, Button
 import random
 import os
 from dotenv import load_dotenv
@@ -13,7 +14,7 @@ intents.message_content = True
 intents.reactions = True
 intents.members = True
 
-bot = commands.Bot(command_prefix='!', intents=intents)
+bot = commands.Bot(command_prefix="!", intents=intents)
 
 game_data = {
     'organizer': None,
@@ -46,6 +47,34 @@ async def on_ready():
     print(f'{bot.user} has connected to Discord!')
     await bot.tree.sync()
 
+class JoinStartView(View):
+    def __init__(self, organizer):
+        super().__init__(timeout=None)
+        self.organizer = organizer
+
+    @discord.ui.button(label="👍 参加", style=discord.ButtonStyle.success, custom_id="join_game")
+    async def join_button(self, interaction: discord.Interaction, button: Button):
+        user = interaction.user
+        if user in game_data['players']:
+            await interaction.response.send_message("すでに参加しています！", ephemeral=True)
+        else:
+            game_data['players'].append(user)
+            await update_embed_players()
+            await interaction.response.send_message("参加しました！", ephemeral=True)
+
+    @discord.ui.button(label="✅ 開始", style=discord.ButtonStyle.primary, custom_id="start_game")
+    async def start_button(self, interaction: discord.Interaction, button: Button):
+        if interaction.user != self.organizer:
+            await interaction.response.send_message("開始できるのは主催者だけです。", ephemeral=True)
+            return
+
+        if len(game_data['players']) < 3:
+            await interaction.response.send_message("最低3人の参加者が必要です。", ephemeral=True)
+            return
+
+        await interaction.response.send_message("ゲームを開始します！", ephemeral=True)
+        await start_game(interaction.channel)
+
 @bot.tree.command(name="ワードウルフ", description="ワードウルフゲームを開始します")
 async def word_wolf(interaction: discord.Interaction):
     if game_data['organizer']:
@@ -66,136 +95,22 @@ async def word_wolf(interaction: discord.Interaction):
         'message_embed': None
     })
 
-    embed = discord.Embed(title='ワードウルフ参加者募集！',
-                          description='お題：ランダム（あとで変更可能）\n\nリアクションで参加してください。\n\n**全員の参加が終わったら、主催者が ✅ を押してゲームを開始します。**\n（最低3人以上必要です）',
-                          color=0x00ff00)
+    embed = discord.Embed(
+        title='ワードウルフ参加者募集！',
+        description='お題：ランダム（あとで変更可能）\n\n**ボタンを押して参加してください。**\n\n**全員の参加が終わったら、主催者が「開始」を押してゲームを始めてください。**\n（最低3人以上必要です）',
+        color=0x00ff00
+    )
     embed.add_field(name='参加プレイヤー', value='なし')
-    
-    await interaction.response.send_message('参加募集を開始しました！', ephemeral=True)
-    
-    message = await interaction.channel.send(embed=embed)
+    message = await interaction.channel.send(embed=embed, view=JoinStartView(interaction.user))
     game_data['message_embed'] = message
-    await message.add_reaction('👍')
-    await message.add_reaction('✅')
-
-@bot.tree.command(name="投票", description="ウルフを投票で見つけましょう")
-async def 投票(interaction: discord.Interaction):
-    if interaction.user not in game_data['players']:
-        await interaction.response.send_message('ゲームに参加していません', ephemeral=True)
-        return
-
-    desc = '\n'.join([f'{i+1}. {p.name}' for i, p in enumerate(game_data['players'])])
-    embed = discord.Embed(title='投票を始めます', description='リアクションで投票してください\n\n' + desc, color=0x00ffcc)
-    
-    await interaction.response.send_message('投票を開始しました！', ephemeral=True)
-
-    vote_msg = await interaction.channel.send(embed=embed)
-    game_data['vote_message'] = vote_msg
-    game_data['votes'] = {i: 0 for i in range(len(game_data['players']))}
-    game_data['voted_users'] = set()
-    game_data['vote_start_time'] = discord.utils.utcnow()
-
-    for i in range(len(game_data['players'])):
-        await vote_msg.add_reaction(f'{i+1}⃣')
-
-@bot.tree.command(name="結果", description="投票結果を表示します")
-async def 結果(interaction: discord.Interaction):
-    if interaction.user != game_data['organizer']:
-        await interaction.response.send_message('主催者だけが実行できます', ephemeral=True)
-        return
-
-    if not game_data['vote_start_time']:
-        await interaction.response.send_message('まだ投票が開始されていません', ephemeral=True)
-        return
-
-    if (discord.utils.utcnow() - game_data['vote_start_time']).total_seconds() < 60:
-        await interaction.response.send_message('投票開始から1分経っていません', ephemeral=True)
-        return
-
-    await interaction.response.send_message('投票結果を表示します！', ephemeral=True)
-    await show_result(interaction.channel)
-
-@bot.tree.command(name="お題一覧", description="ゲームのお題一覧を表示します")
-async def お題一覧(interaction: discord.Interaction):
-    theme_names = '\n'.join(theme_pool.keys())
-    embed = discord.Embed(title="お題一覧", description=theme_names, color=0x00ffcc)
-    await interaction.response.send_message(embed=embed, ephemeral=True)
-
-@bot.tree.command(name="終了", description="ワードウルフゲームを終了します")
-async def 終了(interaction: discord.Interaction):
-    if not game_data['organizer']:
-        await interaction.response.send_message("ゲームが開始されていません", ephemeral=True)
-        return
-
-    if interaction.user != game_data['organizer']:
-        await interaction.response.send_message("このコマンドは主催者のみ実行できます", ephemeral=True)
-        return
-
-    players = game_data['players']
-    wolf = next(p for p in players if game_data['words'][p.id] == game_data['wolf_word'])
-
-    result_text = f"ゲームが終了しました！\n\n"
-    result_text += f"ウルフのワードは「{game_data['wolf_word']}」\n"
-    result_text += f"市民のワードは「{game_data['citizen_word']}」\n"
-    result_text += f"ウルフは {wolf.name} さんでした！\n"
-
-    embed = discord.Embed(title="ゲーム終了", description=result_text, color=0xff0000)
-    await interaction.channel.send(embed=embed)
-    await interaction.response.send_message("ゲームを終了しました", ephemeral=True)
-
-    reset_game()
-
-@bot.event
-async def on_reaction_add(reaction, user):
-    if user.bot:
-        return
-
-    if reaction.message.id != getattr(game_data['message_embed'], 'id', None):
-        return
-
-    if reaction.emoji == '👍':
-        if user not in game_data['players']:
-            game_data['players'].append(user)
-            await update_embed_players()
-
-    elif reaction.emoji == '✅' and user == game_data['organizer']:
-        if len(game_data['players']) < 3:
-            await reaction.message.channel.send(f'{game_data["organizer"].mention} ゲーム開始には最低3人の参加者が必要です。')
-            return
-        await start_game(reaction.message.channel)
-
-@bot.event
-async def on_raw_reaction_add(payload):
-    if payload.user_id == bot.user.id:
-        return
-
-    channel = await bot.fetch_channel(payload.channel_id)
-    message = await channel.fetch_message(payload.message_id)
-    user = await bot.fetch_user(payload.user_id)
-    emoji = str(payload.emoji)
-
-    if message.id == getattr(game_data['vote_message'], 'id', None):
-        await on_reaction_add_vote(message, emoji, user)
-
-async def on_reaction_add_vote(message, emoji, user):
-    if user.id in game_data['voted_users']:
-        return
-
-    for i in range(len(game_data['players'])):
-        if emoji == f'{i+1}⃣':
-            game_data['votes'][i] += 1
-            game_data['voted_users'].add(user.id)
-            break
-
-    if len(game_data['voted_users']) == len(game_data['players']):
-        await show_result(message.channel)
+    await interaction.response.send_message("ゲームの準備を開始しました！", ephemeral=True)
 
 async def update_embed_players():
     embed = game_data['message_embed'].embeds[0]
     player_names = '\n'.join(f'・{p.name}' for p in game_data['players'])
     theme_text = game_data['theme'] if game_data['theme'] else 'ランダム（あとで変更可能）'
     embed.set_field_at(0, name='参加プレイヤー', value=player_names or 'なし')
-    embed.description = f'お題：{theme_text}\n\nリアクションで参加してください。\n\n**全員の参加が終わったら、主催者が ✅ を押してゲームを開始します。**\n（最低3人以上必要です）'
+    embed.description = f'お題：{theme_text}\n\n**ボタンを押して参加してください。**\n\n**全員の参加が終わったら、主催者が「開始」を押してゲームを始めてください。**\n（最低3人以上必要です）'
     await game_data['message_embed'].edit(embed=embed)
 
 async def start_game(channel):
@@ -226,58 +141,20 @@ async def start_game(channel):
                           description=f'カテゴリー：{theme}\n\n参加プレイヤー：\n{player_list}\n\n議論を始めてください！',
                           color=0xff0000)
     await channel.send(embed=embed)
-    await game_data['message_embed'].clear_reactions()
 
+    # 特定ロールへの役職通知
     role = discord.utils.get(channel.guild.roles, id=ROLE_ID)
     if role:
         embed_roles = discord.Embed(title="ゲームの役職情報", color=0x00ff00)
         for player in game_data['players']:
             role_text = "市民" if game_data['words'][player.id] == game_data['citizen_word'] else "ウルフ"
             embed_roles.add_field(name=player.name, value=role_text, inline=False)
-
         for member in role.members:
             try:
                 await member.send(embed=embed_roles)
             except:
                 pass
 
-async def show_result(channel):
-    votes = game_data['votes']
-    players = game_data['players']
-
-    max_votes = max(votes.values())
-    candidates = [i for i, v in votes.items() if v == max_votes]
-    chosen_index = candidates[0]
-    chosen = players[chosen_index]
-    wolf = next(p for p in players if game_data['words'][p.id] == game_data['wolf_word'])
-
-    result_text = f'もっとも投票されたのは {chosen.name} さんでした。得票数：{votes[chosen_index]}票\n\n'
-    result_text += f'ウルフのワードは「{game_data["wolf_word"]}」\n市民のワードは「{game_data["citizen_word"]}」\n\n'
-    result_text += f'ウルフは {wolf.name} さんでした！\n\n'
-
-    if chosen == wolf:
-        result_text += '市民の勝ち！ 🎉'
-    else:
-        result_text += 'ウルフの勝ち！ 🐺'
-
-    embed = discord.Embed(title="投票結果", description=result_text, color=0xff0000)
-    await channel.send(embed=embed)
-    reset_game()
-
-def reset_game():
-    game_data.clear()
-    game_data.update({
-        'organizer': None,
-        'players': [],
-        'votes': {},
-        'voted_users': set(),
-        'words': {},
-        'theme': '',
-        'citizen_word': '',
-        'wolf_word': '',
-        'vote_message': None,
-        'vote_start_time': None,
-        'message_embed': None
-    })
+    await game_data['message_embed'].edit(view=None)
 
 bot.run(TOKEN)
