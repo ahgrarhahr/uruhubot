@@ -268,7 +268,7 @@ async def show_result(channel):
     await channel.send(embed=embed)
 
     # リプレイ選択用のボタンビュー
-   class ReplayView(discord.ui.View):
+  class ReplayView(discord.ui.View):
     @discord.ui.button(label='YES', style=discord.ButtonStyle.success)
     async def yes_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         reset_game()
