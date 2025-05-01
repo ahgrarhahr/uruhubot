@@ -287,6 +287,20 @@ def reset_game():
         'message_embed': None
     })
 
+@bot.command(name="お題変更")
+async def お題変更(ctx, *, theme_name: str):
+    if not game_data['organizer']:
+        await ctx.send("まだゲームが開始されていません")
+        return
+
+    if theme_name not in theme_pool:
+        await ctx.send(f'お題「{theme_name}」は存在しません。')
+        return
+
+    game_data['theme'] = theme_name
+    await update_embed_players()
+    await ctx.send(f'お題が「{theme_name}」に変更されました！')
+
 @bot.tree.command(name="お題一覧", description="ゲームのお題一覧を表示します")
 async def お題一覧(interaction: discord.Interaction):
     theme_names = '\n'.join(theme_pool.keys())
