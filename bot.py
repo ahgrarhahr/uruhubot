@@ -268,7 +268,7 @@ async def show_result(channel):
     await channel.send(embed=embed)
 
     # リプレイ選択用のボタンビュー
-    class ReplayView(discord.ui.View):
+   class ReplayView(discord.ui.View):
     @discord.ui.button(label='YES', style=discord.ButtonStyle.success)
     async def yes_button(self, interaction: discord.Interaction, button: discord.ui.Button):
         # ゲームをリセットして最初から開始
@@ -283,6 +283,7 @@ async def show_result(channel):
         # ゲームを終了
         await interaction.response.send_message("ゲームを終了します。お疲れさまでした！", ephemeral=True)
         reset_game()
+        
     # 結果発表後に「もう一度やりますか？」メッセージを送信
     replay_embed = discord.Embed(
         title="🔄 もう一度やりますか？",
