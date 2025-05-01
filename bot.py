@@ -271,16 +271,13 @@ async def show_result(channel):
    class ReplayView(discord.ui.View):
     @discord.ui.button(label='YES', style=discord.ButtonStyle.success)
     async def yes_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # ゲームをリセットして最初から開始
         reset_game()
-        game_data['organizer'] = interaction.user  # 新しい主催者を設定
+        game_data['organizer'] = interaction.user
         await interaction.response.send_message("新しいゲームを始めます！", ephemeral=True)
-        # 最初の参加募集メッセージを送信
         await word_wolf(interaction)
 
     @discord.ui.button(label='NO', style=discord.ButtonStyle.danger)
     async def no_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # ゲームを終了
         await interaction.response.send_message("ゲームを終了します。お疲れさまでした！", ephemeral=True)
         reset_game()
         
