@@ -280,9 +280,9 @@ async def show_result(channel):
 
     @discord.ui.button(label='NO', style=discord.ButtonStyle.danger)
     async def no_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # ゲームを終了
         await interaction.response.send_message("ゲームを終了します。お疲れさまでした！", ephemeral=True)
         reset_game()
-
     # 結果発表後に「もう一度やりますか？」メッセージを送信
     replay_embed = discord.Embed(
         title="🔄 もう一度やりますか？",
